@@ -30,3 +30,15 @@
 *.exe
 *.out
 *.app
+
+build/.qtc_clangd/.cache/clangd/index/
+
+build/.qtc_clangd/
+
+build/Debug/.qtc_clangd/.cache/clangd/index/
+
+build/Release/.qtc_clangd/.cache/clangd/index/
+
+build/Release/
+
+build/Debug/.qtc_clangd/
