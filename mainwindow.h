@@ -76,7 +76,12 @@ private:
     QString forecastURL_prob;
     QVector<weatherDatapoint> weatherData_quan;
     QVector<weatherDatapoint> weatherData_prob;
-
+    void configureCoordinateInputs();
+    void setupButtonConnections();
+    void setupStateCityMapping();
+    void setupDistanceSensor();
+    void configureWaterControls();
+    void setupCharts();
 
 
     QChart *chart_quan;

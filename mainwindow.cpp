@@ -27,66 +27,102 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , Weatherupdatetimer(new QTimer(this))
+    , timer1(new QTimer(this))
+    , timer2(new QTimer(this))
+    , depthCheckTimer(new QTimer(this))
 {
+    // Setup UI
     ui->setupUi(this);
 
+    // Configure input placeholders and styles
+    configureCoordinateInputs();
+
+    // Connect button signals to slots
+    setupButtonConnections();
+
+    // Parse CSV for state-city mapping and initialize combo boxes
+    setupStateCityMapping();
+
+    // Setup weather update timer
+    connect(Weatherupdatetimer, &QTimer::timeout, this, &MainWindow::updateWeatherData);
+
+    // Initialize distance sensor
+    setupDistanceSensor();
+
+    // Configure water level and valve controls
+    configureWaterControls();
+
+#ifdef GPIO
+    setupGPIO();
+#endif
+
+    // Setup charts
+    setupCharts();
+}
+
+void MainWindow::configureCoordinateInputs() {
     ui->X_coordinate->setPlaceholderText("Enter X Coordinate");
     ui->Y_coordinate->setPlaceholderText("Enter Y Coordinate");
-    ui->X_coordinate->setStyleSheet("QLineEdit { color: black; } QLineEdit::placeholder { color: lightgray; }");
-    ui->Y_coordinate->setStyleSheet("QLineEdit { color: black; } QLineEdit::placeholder { color: lightgray; }");
+    QString lineEditStyle = "QLineEdit { color: black; } QLineEdit::placeholder { color: lightgray; }";
+    ui->X_coordinate->setStyleSheet(lineEditStyle);
+    ui->Y_coordinate->setStyleSheet(lineEditStyle);
+}
+
+void MainWindow::setupButtonConnections() {
     connect(ui->submitButton, &QPushButton::clicked, this, &MainWindow::on_submitButton_clicked);
     connect(ui->exitButton, &QPushButton::clicked, this, &MainWindow::on_exitButton_clicked);
-    disconnect(ui->exitButton, &QPushButton::clicked, this, &MainWindow::on_exitButton_clicked);
-    CSVParser parser("/home/hoomanmoradpour/Downloads/simplemaps_uscities_basicv1.79 (1)/uscities.csv");
-    m_stateCityMap = parser.parse();
-
-    ui->stateComboBox->addItems(m_stateCityMap.keys());
-    //inigetForecastURL("https://api.weather.gov/points/47.2588,-121.3152");
 
     connect(ui->stateComboBox, &QComboBox::currentTextChanged, this, &MainWindow::onStateChanged);
     connect(ui->cityComboBox, &QComboBox::currentTextChanged, this, &MainWindow::onCityChanged);
 
+#ifdef GPIO
+    connect(ui->pushButton_Measure_distance, &QPushButton::clicked, this, &MainWindow::on_pushButton_Measure_distance_clicked);
+#endif
+    connect(ui->Valve, &QPushButton::clicked, this, &MainWindow::on_click);
+
+    connect(timer1, &QTimer::timeout, this, &MainWindow::Turnoff);
+    connect(timer2, &QTimer::timeout, this, &MainWindow::TurnOn);
+}
+
+void MainWindow::setupStateCityMapping() {
+    CSVParser parser("/home/arash/Projects/SmartRainWaterHarvesting/uscities.csv");
+    m_stateCityMap = parser.parse();
+
+    ui->stateComboBox->addItems(m_stateCityMap.keys());
     onStateChanged(ui->stateComboBox->currentText());
+}
 
-    connect(Weatherupdatetimer, &QTimer::timeout, this, &MainWindow::updateWeatherData);
-
+void MainWindow::setupDistanceSensor() {
     setupdistanceSensor();
+}
+
+void MainWindow::configureWaterControls() {
     ui->pushButton_Measure_distance->setText("Water Level");
-    connect(ui->pushButton_Measure_distance, SIGNAL(clicked()), this, SLOT(on_pushButton_Measure_distance_clicked()));
-
-
     ui->Valve->setText("Valve on");
-    connect(ui->Valve, SIGNAL(clicked()),this, SLOT(on_click()));
-    timer1 = new QTimer(this);
-    timer2= new QTimer(this);
-    depthCheckTimer = new QTimer(this);
-    connect(timer1, SIGNAL(timeout()), this, SLOT(Turnoff()));
-    connect(timer2, SIGNAL(timeout()), this, SLOT(TurnOn()));
-
+}
 
 #ifdef GPIO
-    //Prevent warnings from GPIO
+void MainWindow::setupGPIO() {
     wiringPiSetupGpio(); // Use BCM pin numbering
 
     DistanceSensor sensor;
-   if (!sensor.initialize()) {
+    if (!sensor.initialize()) {
         qDebug() << "Something is wrong with the distance sensor!";
-  }
-   else
-  {
-      double distance = sensor.getDistance();
-       qDebug() << "Measured Distance =" << distance << "cm";
+    } else {
+        double distance = sensor.getDistance();
+        qDebug() << "Measured Distance =" << distance << "cm";
     }
 
     sensor.cleanup();
     DS.initialize();
+}
+#endif
 
- #endif
-
+void MainWindow::setupCharts() {
     setupChart_prob();
     setupChart_quan();
-
 }
+
 
 MainWindow::~MainWindow()
 {
@@ -203,7 +239,7 @@ void MainWindow::TurnOn()
 const double MAX_DEPTH = 50.0; // Max depth to keep valve open (in cm)
 const double MIN_DEPTH = 10.0;  // Min depth to close valve (in cm)
 */
-bool on = false;
+
 
 void MainWindow::setupdistanceSensor() {
     //sensor.initialize();
@@ -399,41 +435,6 @@ void MainWindow::plotForecast_prob()
 
     updateChartData_prob(forecastData_prob);
 }
-
-
-void MainWindow::show_json()
-{
-    ui->textEdit->setText(ui->textEdit->toPlainText() + "\n" + "Graph updated" );
-    QJsonObject jsonobject_quan = downloaderGetForcast_quan->loadedJson.object();
-    QJsonObject jsonobject_prob = downloaderGetForcast_prob->loadedJson.object();
-    qDebug() << jsonobject_quan;
-
-    forecastArray_quan = jsonobject_quan.value("properties").toObject().value("forecastGridData").toArray();
-    forecastArray_prob = jsonobject_prob.value("properties").toObject().value("periods").toArray();
-
-    QString forecastUrl_quan = jsonobject_quan.value("properties").toObject().value("quantitativePrecipitation").toString();
-    QString forecastUrl_prob = jsonobject_quan.value("properties").toObject().value("forecastHourly").toString();
-    qDebug() << "Forecast URL: " << forecastUrl_prob;
-    qDebug() << "Forecast URL: " << forecastUrl_quan;
-    connect(downloaderGetForcast_quan, SIGNAL(download_finished_sgnl()), this, SLOT(process_forecast_data_quan()));
-    connect(downloaderGetForcast_prob, SIGNAL(download_finished_sgnl()), this, SLOT(process_forecast_data_prob()));
-
-    if (!forecastUrl_quan.isEmpty() && !forecastUrl_prob.isEmpty()) {
-
-        disconnect(downloaderGetForcast_quan, SIGNAL(download_finished_sgnl()), this, SLOT(enable_button()));
-        disconnect(downloaderGetForcast_prob, SIGNAL(download_finished_sgnl()), this, SLOT(enable_button()));
-
-
-        downloaderGetForcast_quan->setUrl(forecastURL_quan);
-        downloaderGetForcast_prob->setUrl(forecastURL_prob);
-        downloaderGetForcast_quan->execute();
-        downloaderGetForcast_prob->execute();
-    }
-
-    showDatainList_quan();
-    showDatainList_prob();
-}
-
 
 
 void MainWindow::showDatainList_quan() {
