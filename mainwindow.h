@@ -118,7 +118,6 @@ private:
     double cumulative_precipitation = 0;
 
 public slots:
-    void show_json();
     void on_exitButton_clicked();
     void getForecastURL(); 
     void getWeatherPrediction_quan();
